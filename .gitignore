@@ -3,3 +3,4 @@ obj/
 .ntvs_analysis.*
 node_modules
 bin/
+.env

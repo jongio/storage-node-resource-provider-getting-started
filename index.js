@@ -3,46 +3,52 @@
  * Licensed under the MIT License. See License.txt in the project root for
  * license information.
  */
-'use strict';
+"use strict";
+require("dotenv").config();
+
 var Environment = require("@azure/ms-rest-azure-env");
-var util = require('util');
-var async = require('async');
-var msRestAzure = require('@azure/ms-rest-nodeauth');
-var ResourceManagementClient = require('@azure/arm-resources-profile-hybrid-2019-03-01').ResourceManagementClient;
-var StorageManagementClient = require('@azure/arm-storage-profile-2019-03-01-hybrid').StorageManagementClient;
-const request = require('request');
-const https = require('https');
+var KeyVault = require("azure-keyvault");
+
+var util = require("util");
+var async = require("async");
+var msRestAzure = require("@azure/ms-rest-nodeauth");
+var ResourceManagementClient = require("@azure/arm-resources-profile-hybrid-2019-03-01")
+  .ResourceManagementClient;
+var StorageManagementClient = require("@azure/arm-storage-profile-2019-03-01-hybrid")
+  .StorageManagementClient;
+const request = require("request");
+const https = require("https");
 const fetch = require("node-fetch");
 const requestPromise = util.promisify(request);
- _validateEnvironmentVariables();
-var clientId = process.env['AZURE_CLIENT_ID'];
-var tenantId = process.env['AZURE_TENANT_ID']; //"adfs"
-var secret = process.env['AZURE_CLIENT_SECRET'];
-var subscriptionId = process.env['AZURE_SUBSCRIPTION_ID'];
-var base_url = process.env['ARM_ENDPOINT'];
+_validateEnvironmentVariables();
+var clientId = process.env["AZURE_CLIENT_ID"];
+var tenantId = process.env["AZURE_TENANT_ID"]; //"adfs"
+var secret = process.env["AZURE_CLIENT_SECRET"];
+var subscriptionId = process.env["AZURE_SUBSCRIPTION_ID"];
+var base_url = process.env["ARM_ENDPOINT"];
 var resourceClient, storageClient;
 
 //Sample Config
 var randomIds = {};
-var location = 'westus2';
-var accType = 'Standard_LRS';
-var resourceGroupName = _generateRandomId('testrg', randomIds);
-var storageAccountName = _generateRandomId('testacc', randomIds);
+var location = "redmond";
+var accType = "Standard_LRS";
+var resourceGroupName = _generateRandomId("sarathys", randomIds);
+var storageAccountName = _generateRandomId("testacc", randomIds);
 
 // create a map
 var map = {};
-const fetchUrl = base_url + 'metadata/endpoints?api-version=1.0'
+const fetchUrl = base_url + "metadata/endpoints?api-version=1.0";
 
 function initialize() {
   // Setting URL and headers for request
   var options = {
     url: fetchUrl,
     headers: {
-      'User-Agent': 'request'
+      "User-Agent": "request",
     },
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
   };
-  // Return new promise 
+  // Return new promise
   return new Promise(function (resolve, reject) {
     // Do async job
     request.get(options, function (err, resp, body) {
@@ -51,57 +57,88 @@ function initialize() {
       } else {
         resolve(JSON.parse(body));
       }
-    })
-  })
-
+    });
+  });
 }
 
 function main() {
   var initializePromise = initialize();
-  initializePromise.then(function (result) {
-    var userDetails = result;
-    console.log("Initialized user details");
-    // Use user details from here
-    console.log(userDetails)
-    map["name"] = "AzureStack"
-    map["portalUrl"] = userDetails.portalEndpoint 
-    map["resourceManagerEndpointUrl"] = base_url 
-    map["galleryEndpointUrl"] = userDetails.galleryEndpoint 
-    map["activeDirectoryEndpointUrl"] = userDetails.authentication.loginEndpoint.slice(0, userDetails.authentication.loginEndpoint.lastIndexOf("/") + 1) 
-    map["activeDirectoryResourceId"] = userDetails.authentication.audiences[0] 
-    map["activeDirectoryGraphResourceId"] = userDetails.graphEndpoint 
-    map["storageEndpointSuffix"] = "." + base_url.substring(base_url.indexOf('.'))  
-    map["keyVaultDnsSuffix"] = ".vault" + base_url.substring(base_url.indexOf('.')) 
-    map["managementEndpointUrl"] = userDetails.authentication.audiences[0] 
-    map["validateAuthority"] = "false"
-    Environment.Environment.add(map);
+  initializePromise.then(
+    function (result) {
+      var userDetails = result;
+      console.log("Initialized user details");
+      // Use user details from here
+      console.log(userDetails);
+      map["name"] = "AzureStack";
+      map["portalUrl"] = userDetails.portalEndpoint;
+      map["resourceManagerEndpointUrl"] = base_url;
+      map["galleryEndpointUrl"] = userDetails.galleryEndpoint;
+      //map["activeDirectoryEndpointUrl"] = userDetails.authentication.loginEndpoint.slice(0, userDetails.authentication.loginEndpoint.lastIndexOf("/"))
+      map[
+        "activeDirectoryEndpointUrl"
+      ] = userDetails.authentication.loginEndpoint.slice(
+        0,
+        userDetails.authentication.loginEndpoint.lastIndexOf("/") + 1
+      );
+      map["activeDirectoryResourceId"] =
+        userDetails.authentication.audiences[0];
+      map["activeDirectoryGraphResourceId"] = userDetails.graphEndpoint;
+      map["storageEndpointSuffix"] =
+        "." + base_url.substring(base_url.indexOf("."));
+      map["keyVaultDnsSuffix"] =
+        ".vault" + base_url.substring(base_url.indexOf("."));
+      map["managementEndpointUrl"] = userDetails.authentication.audiences[0];
+      map["validateAuthority"] = false;
+      Environment.Environment.add(map);
 
-    var tokenAudience = map["activeDirectoryResourceId"]
+      var tokenAudience = map["activeDirectoryResourceId"];
 
-    var options = {};
-    options["environment"] = Environment.Environment.AzureStack;
-    options["tokenAudience"] = tokenAudience;
+      var options = {};
+      options["environment"] = Environment.Environment.AzureStack;
+      options["tokenAudience"] =
+        "https://vault.adfs.redmond.selfhost.local/81cfafcd-8b9a-4419-9c85-823b54076b55";
+      options.environment.validateAuthority = false;
 
-    msRestAzure.loginWithServicePrincipalSecret(clientId, secret, tenantId, options, function (err, credentials) {
-      if (err) return console.log(err);
+      msRestAzure.loginWithServicePrincipalSecret(
+        clientId,
+        secret,
+        "adfs",
+        options,
+        function (err, credentials) {
+          if (err) return console.log(err);
 
-      var clientOptions = {};
-      clientOptions["baseUri"] = base_url;
-      resourceClient = new ResourceManagementClient(credentials, subscriptionId, clientOptions);
-      storageClient = new StorageManagementClient(credentials, subscriptionId, clientOptions);
+          var clientOptions = {};
+          clientOptions["baseUri"] = base_url;
 
-      // Work flow of this sample:
-      // Setup. Create a resource group 
-      // 1. Create a storage account
-      // 2. Get all the account properties
-      // 3. List all the storage accounts in a resource group
-      // 4. List all the storage accounts in a subscription
-      // 5. Get the storage account keys for a given storage account
-      // 6. Rgenerate account keys for a given storage account
-      // 7. Update storage account properties
-      // 8. Check if the storage account name is available
-      // 9. Get the current usage count and the limit for resources under the current subscription
+          const client = new KeyVault.KeyVaultClient(credentials);
+          client
+            .createKey(
+              "https://testkv.vault.redmond.azurestack.corp.microsoft.com/",
+              "jongKey",
+              "RSA"
+            )
+            .then((keyBundle) => {
+              // Encrypt some plain text
+              console.log(keyBundle.key.kid);
+              //return client.encrypt(keyBundle.key.kid, 'RSA-OAEP', "ciphertext");
+            });
 
+          //resourceClient = new ResourceManagementClient(credentials, subscriptionId, clientOptions);
+          //storageClient = new StorageManagementClient(credentials, subscriptionId, clientOptions);
+
+          // Work flow of this sample:
+          // Setup. Create a resource group
+          // 1. Create a storage account
+          // 2. Get all the account properties
+          // 3. List all the storage accounts in a resource group
+          // 4. List all the storage accounts in a subscription
+          // 5. Get the storage account keys for a given storage account
+          // 6. Rgenerate account keys for a given storage account
+          // 7. Update storage account properties
+          // 8. Check if the storage account name is available
+          // 9. Get the current usage count and the limit for resources under the current subscription
+
+          /*
       async.series([
         function (callback) {
           //Setup
@@ -204,19 +241,30 @@ function main() {
           console.log(util.format('Please execute the following script for cleanup:\nnode cleanup.js %s %s', resourceGroupName, storageAccountName));
           process.exit();
         });
-    });
-  }, function (err) {
-    console.log(err);
-  })
+  */
+        }
+      );
+    },
+    function (err) {
+      console.log(err);
+    }
+  );
 }
 
 main();
 
 // Helper functions
 function createResourceGroup(callback) {
-  var groupParameters = { location: location, tags: { sampletag: 'sampleValue' } };
-  console.log('\nCreating resource group: ' + resourceGroupName);
-  return resourceClient.resourceGroups.createOrUpdate(resourceGroupName, groupParameters, callback);
+  var groupParameters = {
+    location: location,
+    tags: { sampletag: "sampleValue" },
+  };
+  console.log("\nCreating resource group: " + resourceGroupName);
+  return resourceClient.resourceGroups.createOrUpdate(
+    resourceGroupName,
+    groupParameters,
+    callback
+  );
 }
 
 function createStorageAccount(callback) {
@@ -225,66 +273,120 @@ function createStorageAccount(callback) {
     sku: {
       name: accType,
     },
-    kind: 'Storage',
+    kind: "Storage",
     tags: {
-      tag1: 'val1',
-      tag2: 'val2'
-    }
+      tag1: "val1",
+      tag2: "val2",
+    },
   };
-  console.log('\n-->Creating storage account: ' + storageAccountName + ' with parameters:\n' + util.inspect(createParameters));
-  return storageClient.storageAccounts.create(resourceGroupName, storageAccountName, createParameters, callback);
+  console.log(
+    "\n-->Creating storage account: " +
+      storageAccountName +
+      " with parameters:\n" +
+      util.inspect(createParameters)
+  );
+  return storageClient.storageAccounts.create(
+    resourceGroupName,
+    storageAccountName,
+    createParameters,
+    callback
+  );
 }
 
 function listStorageAccountsByResourceGroup(callback) {
-  console.log('\n-->Listing storage accounts in the resourceGroup : ' + resourceGroupName);
-  return storageClient.storageAccounts.listByResourceGroup(resourceGroupName, callback);
+  console.log(
+    "\n-->Listing storage accounts in the resourceGroup : " + resourceGroupName
+  );
+  return storageClient.storageAccounts.listByResourceGroup(
+    resourceGroupName,
+    callback
+  );
 }
 
 function listStorageAccounts(callback) {
-  console.log('\n-->Listing storage accounts in the current subscription.');
+  console.log("\n-->Listing storage accounts in the current subscription.");
   return storageClient.storageAccounts.list(callback);
 }
 
 function listStorageAccountKeys(callback) {
-  console.log('\n-->Listing storage account keys for account: ' + storageAccountName);
-  return storageClient.storageAccounts.listKeys(resourceGroupName, storageAccountName, callback);
+  console.log(
+    "\n-->Listing storage account keys for account: " + storageAccountName
+  );
+  return storageClient.storageAccounts.listKeys(
+    resourceGroupName,
+    storageAccountName,
+    callback
+  );
 }
 
 function regenerateStorageAccountKeys(callback) {
-  console.log('\n-->Regenerating storage account keys for account: ' + storageAccountName);
-  return storageClient.storageAccounts.regenerateKey(resourceGroupName, storageAccountName, 'key1', callback);
+  console.log(
+    "\n-->Regenerating storage account keys for account: " + storageAccountName
+  );
+  return storageClient.storageAccounts.regenerateKey(
+    resourceGroupName,
+    storageAccountName,
+    "key1",
+    callback
+  );
 }
 
 function getStorageAccount(callback) {
-  console.log('\n-->Getting info of storage account: ' + storageAccountName);
-  return storageClient.storageAccounts.getProperties(resourceGroupName, storageAccountName, callback);
+  console.log("\n-->Getting info of storage account: " + storageAccountName);
+  return storageClient.storageAccounts.getProperties(
+    resourceGroupName,
+    storageAccountName,
+    callback
+  );
 }
 
 function updateStorageAccount(callback) {
   var updateParameters = {
     sku: {
-      name: 'Standard_LRS'
-    }
+      name: "Standard_LRS",
+    },
   };
-  console.log('\n-->Updating storage account : ' + storageAccountName + ' with parameters:\n' + util.inspect(updateParameters));
-  return storageClient.storageAccounts.update(resourceGroupName, storageAccountName, updateParameters, callback);
+  console.log(
+    "\n-->Updating storage account : " +
+      storageAccountName +
+      " with parameters:\n" +
+      util.inspect(updateParameters)
+  );
+  return storageClient.storageAccounts.update(
+    resourceGroupName,
+    storageAccountName,
+    updateParameters,
+    callback
+  );
 }
 
 function checkNameAvailability(callback) {
-  console.log('\n-->Checking if the storage account name : ' + storageAccountName + ' is available.');
-  return storageClient.storageAccounts.checkNameAvailability(storageAccountName, callback);
+  console.log(
+    "\n-->Checking if the storage account name : " +
+      storageAccountName +
+      " is available."
+  );
+  return storageClient.storageAccounts.checkNameAvailability(
+    storageAccountName,
+    callback
+  );
 }
 
 function _validateEnvironmentVariables() {
   var envs = [];
-  if (!process.env['CLIENT_ID']) envs.push('CLIENT_ID');
-  if (!process.env['ARM_ENDPOINT']) envs.push('ARM_ENDPOINT');
-  if (!process.env['APPLICATION_SECRET']) envs.push('APPLICATION_SECRET');
-  if (!process.env['AZURE_SUBSCRIPTION_ID']) envs.push('AZURE_SUBSCRIPTION_ID');
-  if (!process.env['DOMAIN']) envs.push('DOMAIN');
-  if (!process.env['TENANT_ID']) envs.push('TENANT_ID');
+  if (!process.env["CLIENT_ID"]) envs.push("CLIENT_ID");
+  if (!process.env["ARM_ENDPOINT"]) envs.push("ARM_ENDPOINT");
+  if (!process.env["APPLICATION_SECRET"]) envs.push("APPLICATION_SECRET");
+  if (!process.env["AZURE_SUBSCRIPTION_ID"]) envs.push("AZURE_SUBSCRIPTION_ID");
+  if (!process.env["DOMAIN"]) envs.push("DOMAIN");
+  if (!process.env["TENANT_ID"]) envs.push("TENANT_ID");
   if (envs.length > 0) {
-    throw new Error(util.format('please set/export the following environment variables: %s', envs.toString()));
+    throw new Error(
+      util.format(
+        "please set/export the following environment variables: %s",
+        envs.toString()
+      )
+    );
   }
 }
 

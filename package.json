@@ -24,6 +24,7 @@
     "async": "0.2.7",
     "azure-arm-resource": "^1.4.4-preview",
     "azure-arm-storage": "^0.13.1-preview",
+    "dotenv": "^8.2.0",
     "ms-rest-azure": "^1.14.3",
     "node-fetch": "^2.6.0"
   },
