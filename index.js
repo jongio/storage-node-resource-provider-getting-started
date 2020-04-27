@@ -99,7 +99,7 @@ function main() {
         "https://vault.adfs.redmond.selfhost.local/81cfafcd-8b9a-4419-9c85-823b54076b55";
       options.environment.validateAuthority = false;
 
-      msRestAzure.loginWithServicePrincipalSecret(
+      KeyVault.msRestAzure.loginWithServicePrincipalSecret(
         clientId,
         secret,
         "adfs",
@@ -113,7 +113,7 @@ function main() {
           const client = new KeyVault.KeyVaultClient(credentials);
           client
             .createKey(
-              "https://testkv.vault.redmond.azurestack.corp.microsoft.com/",
+              "https://testkv.vault.redmond.azurestack.corp.microsoft.com",
               "jongKey",
               "RSA"
             )
